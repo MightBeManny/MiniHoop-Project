@@ -1,0 +1,37 @@
+#include <Wire.h>
+#include "rgb_lcd.h"
+
+#define TOUCH_SENSOR_PIN 4  // Grove Touch Sensor connected to D2
+
+rgb_lcd lcd;
+int counter = 0;
+bool lastTouchState = LOW;
+
+void setup() {
+    pinMode(TOUCH_SENSOR_PIN, INPUT);
+    lcd.begin(16, 2);  // Initialize the 16x2 LCD display
+    lcd.setRGB(255, 255, 255);  // Set LCD background color to white
+
+    lcd.setCursor(0, 0);
+    lcd.print("     SCORE:");
+    
+    updateDisplay();
+}
+
+void loop() {
+    bool touchState = digitalRead(TOUCH_SENSOR_PIN);
+
+    // Detect a new touch (rising edge)
+    if (touchState == HIGH && lastTouchState == LOW) {
+        counter++;  // Increment the counter
+        updateDisplay();
+    }
+    lastTouchState = touchState;  // Store the last state
+}
+
+void updateDisplay() {
+    lcd.setCursor(0, 1);
+    lcd.print("       ");  
+    lcd.print(counter);
+    lcd.print("     ");  // Clear any extra digits
+}
