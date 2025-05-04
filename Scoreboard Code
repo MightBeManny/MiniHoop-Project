@@ -1,37 +1,68 @@
 #include <Wire.h>
 #include "rgb_lcd.h"
 
-#define TOUCH_SENSOR_PIN 4  // Grove Touch Sensor connected to D2
+#define TOUCH_SENSOR_PIN 4    // Touch sensor connected to D4
+#define BUZZER_PIN 6          // Buzzer connected to D6
+#define RESET_TIMEOUT 30000   // 30 seconds timeout for reset
+#define COOLDOWN_PERIOD 1000  // 1 second cooldown between score increments
 
 rgb_lcd lcd;
 int counter = 0;
 bool lastTouchState = LOW;
+unsigned long lastUpdateTime = 0;
+unsigned long lastScoreTime = 0;
 
 void setup() {
     pinMode(TOUCH_SENSOR_PIN, INPUT);
-    lcd.begin(16, 2);  // Initialize the 16x2 LCD display
-    lcd.setRGB(255, 255, 255);  // Set LCD background color to white
+    pinMode(BUZZER_PIN, OUTPUT);
+    lcd.begin(16, 2);
+    lcd.setRGB(255, 255, 255);
 
     lcd.setCursor(0, 0);
     lcd.print("     SCORE:");
-    
+
     updateDisplay();
+    lastUpdateTime = millis();
+    lastScoreTime = millis();
 }
 
 void loop() {
     bool touchState = digitalRead(TOUCH_SENSOR_PIN);
+    unsigned long currentTime = millis();
 
-    // Detect a new touch (rising edge)
-    if (touchState == HIGH && lastTouchState == LOW) {
-        counter++;  // Increment the counter
+    if (touchState == HIGH && lastTouchState == LOW && currentTime - lastScoreTime >= COOLDOWN_PERIOD) {
+        counter++;
         updateDisplay();
+        playBuzzer();  // Play sound on score
+        lastUpdateTime = currentTime;
+        lastScoreTime = currentTime;
+
+        while (digitalRead(TOUCH_SENSOR_PIN) == HIGH) {
+            delay(10);
+        }
     }
-    lastTouchState = touchState;  // Store the last state
+
+    if (currentTime - lastUpdateTime >= RESET_TIMEOUT) {
+        if (counter > 0) {
+            counter = 0;
+            updateDisplay();
+            playBuzzer();  // Play sound on reset
+        }
+        lastUpdateTime = currentTime;
+    }
+
+    lastTouchState = touchState;
 }
 
 void updateDisplay() {
     lcd.setCursor(0, 1);
-    lcd.print("       ");  
+    lcd.print("             ");
+    lcd.setCursor(7, 1);
     lcd.print(counter);
-    lcd.print("     ");  // Clear any extra digits
+}
+
+void playBuzzer() {
+    tone(BUZZER_PIN, 1000, 200);  // 1000 Hz for 200ms
+    delay(200);                   // Wait for buzzer to finish
+    noTone(BUZZER_PIN);
 }
