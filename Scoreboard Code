@@ -1,57 +1,75 @@
 #include <Wire.h>
 #include "rgb_lcd.h"
+#include <Bridge.h>
+#include <HttpClient.h>
 
-#define TOUCH_SENSOR_PIN 4    // Touch sensor connected to D4
-#define BUZZER_PIN 6          // Buzzer connected to D6
-#define RESET_TIMEOUT 30000   // 30 seconds timeout for reset
-#define COOLDOWN_PERIOD 1000  // 1 second cooldown between score increments
+#define IR_SENSOR_PIN 4    // IR sensor
+#define BUZZER_PIN 6          // Buzzer
+#define SAVE_BUTTON_PIN 7     // Save-to-Google-Doc button
+#define RESET_TIMEOUT 30000
+#define COOLDOWN_PERIOD 1000
 
 rgb_lcd lcd;
 int counter = 0;
 bool lastTouchState = LOW;
+bool lastSaveButtonState = LOW;
 unsigned long lastUpdateTime = 0;
 unsigned long lastScoreTime = 0;
 
+// Replace with your actual Web App URL from Google Apps Script
+const String googleScriptUrl = "https://script.google.com/macros/s/AKfycbxYRQYXrcORWgwcU9lzZmIXz336OlR-IjfZQmlAsxxVSEXuWAoLqvCLpkKp2mG_mlk9/exec";
+
 void setup() {
-    pinMode(TOUCH_SENSOR_PIN, INPUT);
+    pinMode(IR_SENSOR_PIN, INPUT);
+    pinMode(SAVE_BUTTON_PIN, INPUT);
     pinMode(BUZZER_PIN, OUTPUT);
+
     lcd.begin(16, 2);
     lcd.setRGB(255, 255, 255);
-
     lcd.setCursor(0, 0);
     lcd.print("     SCORE:");
-
     updateDisplay();
+
+    Bridge.begin();  // Start Bridge for Yun
     lastUpdateTime = millis();
     lastScoreTime = millis();
 }
 
 void loop() {
-    bool touchState = digitalRead(TOUCH_SENSOR_PIN);
+    bool touchState = digitalRead(IR_SENSOR_PIN);
+    bool saveButtonState = digitalRead(SAVE_BUTTON_PIN);
     unsigned long currentTime = millis();
 
+    // Scoring logic
     if (touchState == HIGH && lastTouchState == LOW && currentTime - lastScoreTime >= COOLDOWN_PERIOD) {
         counter++;
         updateDisplay();
-        playBuzzer();  // Play sound on score
+        playBuzzer();
         lastUpdateTime = currentTime;
         lastScoreTime = currentTime;
 
-        while (digitalRead(TOUCH_SENSOR_PIN) == HIGH) {
+        while (digitalRead(IR_SENSOR_PIN) == HIGH) {
             delay(10);
         }
     }
 
+    // Timeout reset
     if (currentTime - lastUpdateTime >= RESET_TIMEOUT) {
         if (counter > 0) {
             counter = 0;
             updateDisplay();
-            playBuzzer();  // Play sound on reset
+            playBuzzer();
         }
         lastUpdateTime = currentTime;
     }
 
+    // Save to Google Sheets when save button is pressed
+    if (saveButtonState == HIGH && lastSaveButtonState == LOW) {
+        sendScoreToGoogle(counter);
+    }
+
     lastTouchState = touchState;
+    lastSaveButtonState = saveButtonState;
 }
 
 void updateDisplay() {
@@ -62,7 +80,18 @@ void updateDisplay() {
 }
 
 void playBuzzer() {
-    tone(BUZZER_PIN, 1000, 200);  // 1000 Hz for 200ms
-    delay(200);                   // Wait for buzzer to finish
+    tone(BUZZER_PIN, 1000, 200);
+    delay(200);
     noTone(BUZZER_PIN);
 }
+
+void sendScoreToGoogle(int counter) {
+    HttpClient client;
+    String url = googleScriptUrl + "?score=" + String(counter);
+
+    client.get(url);  // Send GET request
+    lcd.setCursor(0, 0);
+    lcd.print(" Sent to Sheet! ");
+    delay(1000);
+    lcd.setCursor(0, 0);
+    lcd.print("     SCORE:     ");
